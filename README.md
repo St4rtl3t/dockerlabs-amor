@@ -20,19 +20,18 @@
 
 Se verificó la conectividad con el objetivo y se ejecutó `nmap` para identificar los servicios expuestos.
 
-```bash
-nmap -sC -sV -oA nmap/initial 172.17.0.2
-```
-
-![Escaneo de puertos con nmap](./img/01-nmap.png)
+![Escaneo NMAP](assets/Pasted%20image%2020260924194322.png)
 
 El único servicio relevante es el puerto 80, por lo que se procedió a inspeccionarlo desde el navegador.
 
 ### Enumeración web
 
-![Enumeración del servicio web](./img/02-web-user-enum.png)
+![Pasted image 20260924221152.png](assets/Pasted%20image%2020260924221152.png)
 
 El sitio publicaba nombres de posibles usuarios del sistema, entre ellos `carlota` y `oscar`. Esa información es directamente aprovechable para un ataque de fuerza bruta contra SSH.
+
+> [!note]- Desglose de comandos
+> - `nmap`: herramienta de exploración de red y auditoría utilizada para determinar qué puertos están abiertos en la máquina objetivo.
 
 ---
 
@@ -40,11 +39,7 @@ El sitio publicaba nombres de posibles usuarios del sistema, entre ellos `carlot
 
 Con los nombres de usuario identificados, se lanzó un ataque de fuerza bruta contra el servicio SSH utilizando `hydra`.
 
-```bash
-hydra -l carlota -P /usr/share/wordlists/rockyou.txt ssh://172.17.0.2
-```
-
-![Ataque de fuerza bruta con hydra](./img/03-hydra.png)
+![Pasted image 20260924195231.png](assets/Pasted%20image%2020260924195231.png)
 
 > [!success] Credenciales obtenidas
 > ```text
@@ -53,29 +48,17 @@ hydra -l carlota -P /usr/share/wordlists/rockyou.txt ssh://172.17.0.2
 
 Con las credenciales en mano se accedió vía SSH y se verificaron los grupos y permisos del usuario.
 
-```bash
-ssh carlota@172.17.0.2
-id
-```
-
-![Acceso SSH como carlota](./img/04-ssh-carlota.png)
-
----
-
-## Enumeración Post-Explotación
+![Pasted image 20260924195516.png](assets/Pasted%20image%2020260924195516.png)
 
 Ya dentro del sistema, se enumeró el archivo `/etc/passwd` para identificar otros usuarios.
 
-```bash
-cat /etc/passwd
-```
-
-![Enumeración de usuarios](./img/05-passwd.png)
-
-Se identificó un segundo usuario: `oscar`. Sin sus credenciales no había forma de avanzar por ese lado, por lo que se procedió a revisar los directorios personales de `carlota`.
+![Pasted image 20260924195545.png](assets/Pasted%20image%2020260924195545.png)
 
 > [!note]- Desglose de comandos
+> - `hydra`: herramienta de fuerza bruta que soporta múltiples protocolos (en este caso, SSH).
 > - `cat /etc/passwd`: muestra las cuentas registradas en el sistema, útil para identificar usuarios con shell válida.
+
+Se identificó un segundo usuario: `oscar`. Sin sus credenciales no había forma de avanzar por ese lado, por lo que se procedió a revisar los directorios personales de `carlota`.
 
 ---
 
@@ -83,11 +66,7 @@ Se identificó un segundo usuario: `oscar`. Sin sus credenciales no había forma
 
 Dentro de `/home/carlota/Desktop` se encontró una carpeta llamada `Vacaciones` con una imagen `imagen.jpg`. Se analizó con `steghide` en busca de contenido oculto.
 
-```bash
-steghide info imagen.jpg
-```
-
-![Análisis con steghide info](./img/06-steghide-info.png)
+![Pasted image 20260924201908.png](assets/Pasted%20image%2020260924201908.png)
 
 La herramienta confirmó la existencia de un archivo `secret.txt` embebido. Se procedió a extraerlo.
 
@@ -95,11 +74,11 @@ La herramienta confirmó la existencia de un archivo `secret.txt` embebido. Se p
 steghide extract -sf imagen.jpg
 ```
 
-![Extracción del archivo oculto](./img/07-steghide-extract.png)
+![Pasted image 20260924211335.png](assets/Pasted%20image%2020260924211335.png)
 
 El archivo extraído contenía un string en Base64 que, al decodificarse, reveló la contraseña de `oscar`.
 
-![Decodificación Base64](./img/08-base64-decode.png)
+![Pasted image 20260924211532.png](assets/Pasted%20image%2020260924211532.png)
 
 > [!success] Credenciales obtenidas
 > ```text
@@ -116,14 +95,9 @@ El archivo extraído contenía un string en Base64 que, al decodificarse, revel�
 
 ## Acceso como Oscar
 
-Se reutilizaron las credenciales para acceder vía SSH.
+Se reutilizaron las credenciales para acceder vía SSH y se verificaron los permisos de `sudo`.
 
-```bash
-ssh oscar@172.17.0.2
-sudo -l
-```
-
-![Acceso SSH como oscar y permisos sudo](./img/09-ssh-oscar-sudo.png)
+![Pasted image 20260924211825.png](assets/Pasted%20image%2020260924211825.png)
 
 El resultado del `sudo -l` mostró una regla crítica:
 
@@ -134,12 +108,7 @@ User oscar may run the following commands on 564fdd50fcd5:
 
 Es decir, `oscar` puede ejecutar `ruby` como `root` sin contraseña. Antes de explotarlo, se revisaron los directorios en busca de más pistas.
 
-```bash
-ls /home/oscar
-cat /home/oscar/Desktop/nota.txt
-```
-
-![Pista encontrada](./img/10-hint-root.png)
+![Pasted image 20260924212148.png](assets/Pasted%20image%2020260924212148.png)
 
 El archivo mencionaba revisar el escritorio de `root` en busca de un archivo de texto. Es decir, la flag final está en `/root/Desktop`.
 
@@ -150,10 +119,10 @@ El archivo mencionaba revisar el escritorio de `root` en busca de un archivo de 
 Consultando [GTFOBins](https://gtfobins.github.io/gtfobins/ruby/) se identificó la técnica para abusar de `ruby` cuando se ejecuta con privilegios elevados. Ruby permite invocar una shell heredando los privilegios del proceso padre.
 
 ```bash
-sudo ruby -e 'exec "/bin/sh"'
+ruby -e 'exec "/bin/sh"'
 ```
 
-![Obtención de shell como root](./img/11-ruby-root.png)
+![Pasted image 20260924212539.png](assets/Pasted%20image%2020260924212539.png)
 
 > [!note]- Desglose de comandos
 > - `ruby`: intérprete del lenguaje Ruby.
@@ -166,11 +135,9 @@ sudo ruby -e 'exec "/bin/sh"'
 
 Ya como `root`, se accedió al directorio indicado por la pista para leer la flag final.
 
-```bash
-cat /root/Desktop/flag.txt
-```
+![Pasted image 20260924212800.png](assets/Pasted%20image%2020260924212800.png)
 
-![Flag final obtenida](./img/12-root-flag.png)
+Con esto se confirma el fin de la máquina de forma exitosa.
 
 > [!example] Flag Obtenida
 > ```text
