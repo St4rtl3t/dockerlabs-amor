@@ -29,8 +29,8 @@ El único servicio relevante es el puerto 80, por lo que se procedió a inspecci
 
 El sitio publicaba nombres de posibles usuarios del sistema, entre ellos `carlota` y `oscar`. Esa información es directamente aprovechable para un ataque de fuerza bruta contra SSH.
 
-> **Desglose de comandos**
-> - `nmap`: herramienta de exploración de red y auditoría utilizada para determinar qué puertos están abiertos en la máquina objetivo.
+**Desglose de comandos**
+- `nmap`: herramienta de exploración de red y auditoría utilizada para determinar qué puertos están abiertos en la máquina objetivo.
 
 ---
 
@@ -40,10 +40,11 @@ Con los nombres de usuario identificados, se lanzó un ataque de fuerza bruta co
 
 ![Pasted image 20260924195231.png](assets/Pasted%20image%2020260924195231.png)
 
-> [!IMPORTANT] Credenciales obtenidas
-> ```text
-> [ssh] host: 172.17.0.2   login: carlota   password: babygirl
-> ```
+**Credenciales obtenidas:**
+
+```text
+[ssh] host: 172.17.0.2   login: carlota   password: babygirl
+```
 
 Con las credenciales en mano se accedió vía SSH y se verificaron los grupos y permisos del usuario.
 
@@ -53,9 +54,9 @@ Ya dentro del sistema, se enumeró el archivo `/etc/passwd` para identificar otr
 
 ![Pasted image 20260924195545.png](assets/Pasted%20image%2020260924195545.png)
 
-> **Desglose de comandos**
-> - `hydra`: herramienta de fuerza bruta que soporta múltiples protocolos (en este caso, SSH).
-> - `cat /etc/passwd`: muestra las cuentas registradas en el sistema, útil para identificar usuarios con shell válida.
+**Desglose de comandos**
+- `hydra`: herramienta de fuerza bruta que soporta múltiples protocolos (en este caso, SSH).
+- `cat /etc/passwd`: muestra las cuentas registradas en el sistema, útil para identificar usuarios con shell válida.
 
 Se identificó un segundo usuario: `oscar`. Sin sus credenciales no había forma de avanzar por ese lado, por lo que se procedió a revisar los directorios personales de `carlota`.
 
@@ -79,16 +80,17 @@ El archivo extraído contenía un string en Base64 que, al decodificarse, revel�
 
 ![Pasted image 20260924211532.png](assets/Pasted%20image%2020260924211532.png)
 
-> [!IMPORTANT] Credenciales obtenidas
-> ```text
-> Usuario:  oscar
-> Password: eslacasadepinypon
-> ```
+**Credenciales obtenidas:**
 
-> **Desglose de comandos**
-> - `steghide`: herramienta de esteganografía que permite incrustar o extraer información en imágenes y audio.
-> - `info`: subcomando que muestra si hay datos incrustados en el archivo portador.
-> - `extract -sf`: extrae el contenido oculto especificando el archivo portador.
+```text
+Usuario:  oscar
+Password: eslacasadepinypon
+```
+
+**Desglose de comandos**
+- `steghide`: herramienta de esteganografía que permite incrustar o extraer información en imágenes y audio.
+- `info`: subcomando que muestra si hay datos incrustados en el archivo portador.
+- `extract -sf`: extrae el contenido oculto especificando el archivo portador.
 
 ---
 
@@ -123,10 +125,10 @@ ruby -e 'exec "/bin/sh"'
 
 ![Pasted image 20260924212539.png](assets/Pasted%20image%2020260924212539.png)
 
-> **Desglose de comandos**
-> - `ruby`: intérprete del lenguaje Ruby.
-> - `-e`: evalúa el código pasado como argumento.
-> - `exec "/bin/sh"`: reemplaza el proceso actual por una shell `/bin/sh`, heredando sus privilegios.
+**Desglose de comandos**
+- `ruby`: intérprete del lenguaje Ruby.
+- `-e`: evalúa el código pasado como argumento.
+- `exec "/bin/sh"`: reemplaza el proceso actual por una shell `/bin/sh`, heredando sus privilegios.
 
 ---
 
@@ -138,20 +140,21 @@ Ya como `root`, se accedió al directorio indicado por la pista para leer la fla
 
 Con esto se confirma el fin de la máquina de forma exitosa.
 
-> [!IMPORTANT] Flag Obtenida
-> ```text
-> <flag>
-> ```
+**Flag Obtenida:**
+
+```text
+<flag>
+```
 
 ---
 
 ## Más Allá del Reto
 
-> **Análisis Post-Explotación**
-> - **Lo que funcionó:** El ataque de fuerza bruta sobre SSH con `hydra` a partir de usuarios filtrados en la web, y el encadenamiento de `steghide` + Base64 para obtener las credenciales de `oscar`.
-> - **Lo que falló:** Nada relevante. La ruta de explotación fue lineal.
-> - **Herramientas nuevas:** `steghide` para análisis esteganográfico.
-> - **Para la próxima:** Automatizar el análisis de esteganografía sobre imágenes encontradas en directorios de usuario.
+**Análisis Post-Explotación**
+- **Lo que funcionó:** El ataque de fuerza bruta sobre SSH con `hydra` a partir de usuarios filtrados en la web, y el encadenamiento de `steghide` + Base64 para obtener las credenciales de `oscar`.
+- **Lo que falló:** Nada relevante. La ruta de explotación fue lineal.
+- **Herramientas nuevas:** `steghide` para análisis esteganográfico.
+- **Para la próxima:** Automatizar el análisis de esteganografía sobre imágenes encontradas en directorios de usuario.
 
 ---
 
@@ -197,8 +200,7 @@ Contramedidas aplicables si este escenario fuera un entorno real.
 - Auditar periódicamente el archivo `/etc/sudoers` y los archivos en `/etc/sudoers.d/`.
 - Consultar [GTFOBins](https://gtfobins.github.io/) antes de delegar cualquier binario vía `sudo`.
 
-> [!IMPORTANT] Defensa en Profundidad
-> La combinación de controles preventivos (mínimo privilegio, sanitización), detectivos (auditoría de sudoers, `fail2ban`) y correctivos (rotación de credenciales, parcheo) es lo que realmente reduce la superficie de ataque.
+**Defensa en Profundidad:** La combinación de controles preventivos (mínimo privilegio, sanitización), detectivos (auditoría de sudoers, `fail2ban`) y correctivos (rotación de credenciales, parcheo) es lo que realmente reduce la superficie de ataque.
 
 ---
 
