@@ -139,9 +139,6 @@ Ya como `root`, se accedió al directorio indicado por la pista para leer la fla
 ![Pasted image 20260924212800.png](assets/Pasted%20image%2020260924212800.png)
 
 Con esto se confirma el fin de la máquina de forma exitosa.
-
-**Flag Obtenida:**
-
 ---
 
 ## Más Allá del Reto
