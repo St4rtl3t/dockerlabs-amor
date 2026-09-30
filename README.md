@@ -142,10 +142,6 @@ Con esto se confirma el fin de la máquina de forma exitosa.
 
 **Flag Obtenida:**
 
-```text
-<flag>
-```
-
 ---
 
 ## Más Allá del Reto
