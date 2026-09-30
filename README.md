@@ -1,7 +1,6 @@
 # DockerLabs - Amor
 
-> Resumen
-> Máquina Linux que expone un servicio web con una lista de posibles usuarios del sistema. Mediante un ataque de fuerza bruta sobre SSH se obtiene acceso como `carlota`. La enumeración local permite identificar al usuario `oscar`, y tras aplicar esteganografía sobre una imagen en el home se obtienen sus credenciales. Finalmente, una mala configuración de `sudoers` que permite ejecutar `ruby` como `root` sin contraseña habilita la escalada total.
+**Resumen:** Máquina Linux que expone un servicio web con una lista de posibles usuarios del sistema. Mediante un ataque de fuerza bruta sobre SSH se obtiene acceso como `carlota`. La enumeración local permite identificar al usuario `oscar`, y tras aplicar esteganografía sobre una imagen en el home se obtienen sus credenciales. Finalmente, una mala configuración de `sudoers` que permite ejecutar `ruby` como `root` sin contraseña habilita la escalada total.
 
 ## Información de la Máquina
 
@@ -30,7 +29,7 @@ El único servicio relevante es el puerto 80, por lo que se procedió a inspecci
 
 El sitio publicaba nombres de posibles usuarios del sistema, entre ellos `carlota` y `oscar`. Esa información es directamente aprovechable para un ataque de fuerza bruta contra SSH.
 
-> [!note]- Desglose de comandos
+> **Desglose de comandos**
 > - `nmap`: herramienta de exploración de red y auditoría utilizada para determinar qué puertos están abiertos en la máquina objetivo.
 
 ---
@@ -41,7 +40,7 @@ Con los nombres de usuario identificados, se lanzó un ataque de fuerza bruta co
 
 ![Pasted image 20260924195231.png](assets/Pasted%20image%2020260924195231.png)
 
-> [!success] Credenciales obtenidas
+> [!IMPORTANT] Credenciales obtenidas
 > ```text
 > [ssh] host: 172.17.0.2   login: carlota   password: babygirl
 > ```
@@ -54,7 +53,7 @@ Ya dentro del sistema, se enumeró el archivo `/etc/passwd` para identificar otr
 
 ![Pasted image 20260924195545.png](assets/Pasted%20image%2020260924195545.png)
 
-> [!note]- Desglose de comandos
+> **Desglose de comandos**
 > - `hydra`: herramienta de fuerza bruta que soporta múltiples protocolos (en este caso, SSH).
 > - `cat /etc/passwd`: muestra las cuentas registradas en el sistema, útil para identificar usuarios con shell válida.
 
@@ -80,13 +79,13 @@ El archivo extraído contenía un string en Base64 que, al decodificarse, revel�
 
 ![Pasted image 20260924211532.png](assets/Pasted%20image%2020260924211532.png)
 
-> [!success] Credenciales obtenidas
+> [!IMPORTANT] Credenciales obtenidas
 > ```text
 > Usuario:  oscar
 > Password: eslacasadepinypon
 > ```
 
-> [!note]- Desglose de comandos
+> **Desglose de comandos**
 > - `steghide`: herramienta de esteganografía que permite incrustar o extraer información en imágenes y audio.
 > - `info`: subcomando que muestra si hay datos incrustados en el archivo portador.
 > - `extract -sf`: extrae el contenido oculto especificando el archivo portador.
@@ -124,7 +123,7 @@ ruby -e 'exec "/bin/sh"'
 
 ![Pasted image 20260924212539.png](assets/Pasted%20image%2020260924212539.png)
 
-> [!note]- Desglose de comandos
+> **Desglose de comandos**
 > - `ruby`: intérprete del lenguaje Ruby.
 > - `-e`: evalúa el código pasado como argumento.
 > - `exec "/bin/sh"`: reemplaza el proceso actual por una shell `/bin/sh`, heredando sus privilegios.
@@ -139,7 +138,7 @@ Ya como `root`, se accedió al directorio indicado por la pista para leer la fla
 
 Con esto se confirma el fin de la máquina de forma exitosa.
 
-> [!example] Flag Obtenida
+> [!IMPORTANT] Flag Obtenida
 > ```text
 > <flag>
 > ```
@@ -148,7 +147,7 @@ Con esto se confirma el fin de la máquina de forma exitosa.
 
 ## Más Allá del Reto
 
-> [!quote] Análisis Post-Explotación
+> **Análisis Post-Explotación**
 > - **Lo que funcionó:** El ataque de fuerza bruta sobre SSH con `hydra` a partir de usuarios filtrados en la web, y el encadenamiento de `steghide` + Base64 para obtener las credenciales de `oscar`.
 > - **Lo que falló:** Nada relevante. La ruta de explotación fue lineal.
 > - **Herramientas nuevas:** `steghide` para análisis esteganográfico.
@@ -158,8 +157,7 @@ Con esto se confirma el fin de la máquina de forma exitosa.
 
 ## Mitigación
 
-> [!shield] Recomendaciones Defensivas
-> Contramedidas aplicables si este escenario fuera un entorno real.
+Contramedidas aplicables si este escenario fuera un entorno real.
 
 ### Exposición de usuarios en el servicio web
 
@@ -199,7 +197,7 @@ Con esto se confirma el fin de la máquina de forma exitosa.
 - Auditar periódicamente el archivo `/etc/sudoers` y los archivos en `/etc/sudoers.d/`.
 - Consultar [GTFOBins](https://gtfobins.github.io/) antes de delegar cualquier binario vía `sudo`.
 
-> [!tip] Defensa en Profundidad
+> [!IMPORTANT] Defensa en Profundidad
 > La combinación de controles preventivos (mínimo privilegio, sanitización), detectivos (auditoría de sudoers, `fail2ban`) y correctivos (rotación de credenciales, parcheo) es lo que realmente reduce la superficie de ataque.
 
 ---
