@@ -1,6 +1,6 @@
 # DockerLabs - Amor
 
-> [!abstract] Resumen
+> Resumen
 > Máquina Linux que expone un servicio web con una lista de posibles usuarios del sistema. Mediante un ataque de fuerza bruta sobre SSH se obtiene acceso como `carlota`. La enumeración local permite identificar al usuario `oscar`, y tras aplicar esteganografía sobre una imagen en el home se obtienen sus credenciales. Finalmente, una mala configuración de `sudoers` que permite ejecutar `ruby` como `root` sin contraseña habilita la escalada total.
 
 ## Información de la Máquina
